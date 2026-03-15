@@ -1,3 +1,4 @@
+console.log("===== NEW BOT VERSION LOADED v2 =====");
 const { Client, GatewayIntentBits } = require("discord.js");
 const axios = require("axios");
 const express = require("express");
