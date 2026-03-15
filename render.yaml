@@ -1,9 +1,0 @@
-services:
-  - type: web
-    name: pinger
-    runtime: node
-    buildCommand: npm install
-    startCommand: node bot.js
-    envVars:
-      - key: BOT_TOKEN
-        sync: false
