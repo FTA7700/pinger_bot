@@ -1,8 +1,7 @@
 services:
-  - type: worker
-    name: discord-status-bot
+  - type: web
+    name: pinger
     runtime: node
-    plan: free
     buildCommand: npm install
     startCommand: node bot.js
     envVars:
