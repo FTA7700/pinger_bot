@@ -1,43 +1,62 @@
 const { Client, GatewayIntentBits } = require("discord.js");
-const axios = require("axios");
+const express = require("express");
 
-const TOKEN = process.env.BOT_TOKEN;
-const THREAD_ID = "1482085188702965942";
+const TOKEN = process.env.DISCORD_TOKEN;
+const CHANNEL_ID = process.env.CHANNEL_ID;
 
-const ENDPOINT =
-  "https://predictionsproject.onrender.com/api/health";
-
+// --------------------
+// Discord Client
+// --------------------
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds],
+  intents: [GatewayIntentBits.Guilds]
 });
 
-async function checkStatus() {
+// --------------------
+// Web server (Render requires this)
+// --------------------
+const app = express();
+
+app.get("/", (req, res) => {
+  res.send("Bot is running");
+});
+
+// endpoint cron will ping
+app.get("/check", (req, res) => {
+  res.send("OK");
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Web server running on port ${PORT}`);
+});
+
+// --------------------
+// Bot Ready Event
+// --------------------
+client.once("ready", async () => {
+  console.log(`Logged in as ${client.user.tag}`);
+
   try {
-    const start = Date.now();
+    const channel = await client.channels.fetch(CHANNEL_ID);
+    const messages = await channel.messages.fetch({ limit: 10 });
 
-    await axios.get(ENDPOINT, { timeout: 8000 });
+    // find existing status message
+    let statusMessage = messages.find(m =>
+      m.author.id === client.user.id
+    );
 
-    const latency = Date.now() - start;
+    if (statusMessage) {
+      await statusMessage.edit("🟢 Predictions: Online");
+      console.log("Status message updated");
+    } else {
+      await channel.send("🟢 Predictions: Online");
+      console.log("Status message created");
+    }
 
-    const thread = await client.channels.fetch(THREAD_ID);
-
-    await thread.setName(`🟢 API Online (${latency}ms)`);
-
-    console.log("API OK");
   } catch (err) {
-    const thread = await client.channels.fetch(THREAD_ID);
-
-    await thread.setName("🔴 API Offline");
-
-    console.log("API DOWN");
+    console.error("Error updating status:", err);
   }
-}
-
-client.once("ready", () => {
-  console.log("Bot started");
-
-  checkStatus();
-  setInterval(checkStatus, 60000);
 });
 
+// --------------------
 client.login(TOKEN);
