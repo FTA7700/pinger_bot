@@ -1,168 +1,135 @@
-const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js");
-const axios = require("axios");
-
-const TOKEN = process.env.BOT_TOKEN;
-const CHANNEL_ID = process.env.CHANNEL_ID;
-
-const API_URL = "https://predictionsproject.onrender.com/api/health";
-const STATUS_PAGE = "https://m76wrx70.status.cron-job.org/";
-
-const CHECK_INTERVAL = 30000;
-
-if (!TOKEN || !CHANNEL_ID) {
-  console.error("Missing BOT_TOKEN or CHANNEL_ID");
-  process.exit(1);
-}
-
-let lastStatus = null;
-let onlineSince = null;
-let statusMessage = null;
+require("dotenv").config();
+const {
+  Client,
+  GatewayIntentBits,
+  EmbedBuilder,
+} = require("discord.js");
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds]
+  intents: [GatewayIntentBits.Guilds],
 });
 
-function formatUptime(ms) {
-  if (!ms) return "0s";
+/* ================================
+   CONFIG
+================================ */
 
-  const sec = Math.floor(ms / 1000);
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  const s = sec % 60;
+const STATUS_URL = "https://m76wrx70.status.cron-job.org/";
+const CHANNEL_ID = process.env.CHANNEL_ID;
+const MESSAGE_ID = process.env.MESSAGE_ID;
 
-  return `${h}h ${m}m ${s}s`;
+const CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
+
+let lastStatus = null;
+let statusMessage = null;
+let intervalStarted = false;
+
+/* ================================
+   HELPERS
+================================ */
+
+async function fetchStatus() {
+  try {
+    const res = await fetch(STATUS_URL, {
+      headers: { "User-Agent": "DiscordStatusBot" },
+    });
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const text = await res.text();
+
+    // simple detection (cron-job status pages contain these words)
+    if (text.toLowerCase().includes("up")) {
+      return "ONLINE";
+    }
+
+    return "OFFLINE";
+  } catch (err) {
+    console.log("Status fetch failed:", err.message);
+    return "OFFLINE";
+  }
 }
 
 function buildEmbed(status) {
-
-  const uptime =
-    status === "ONLINE"
-      ? formatUptime(Date.now() - onlineSince)
-      : "0s";
+  const isOnline = status === "ONLINE";
 
   return new EmbedBuilder()
     .setTitle("Predictions Service Status")
-    .setColor(status === "ONLINE" ? 0x2ecc71 : 0xe74c3c)
-    .addFields(
-      {
-        name: "Status",
-        value:
-          status === "ONLINE"
-            ? "🟢 Predictions: Online"
-            : "🔴 Predictions: Offline",
-      },
-      {
-        name: "Uptime",
-        value: uptime,
-        inline: true
-      },
-      {
-        name: "Status Page",
-        value: STATUS_PAGE,
-        inline: true
-      }
-    )
-    .setTimestamp();
+    .setColor(isOnline ? 0x2ecc71 : 0xe74c3c)
+    .addFields({
+      name: "Status",
+      value: isOnline
+        ? "🟢 Predictions: Online"
+        : "🔴 Predictions: Offline",
+    })
+    .setTimestamp(new Date());
 }
 
-async function renameThread(channel, status) {
+/* ================================
+   CORE HEALTH CHECK
+================================ */
 
-  const newName =
-    status === "ONLINE"
-      ? "🟢 Predictions: Online"
-      : "🔴 Predictions: Offline";
+async function checkHealth() {
+  console.log("Checking health...");
 
-  if (channel.name === newName) return;
-
-  try {
-
-    await channel.setName(newName);
-
-    console.log("Thread renamed →", newName);
-
-  } catch (err) {
-
-    console.log("Rename failed:", err.message);
-
-  }
-}
-
-async function checkHealth(channel) {
-
-  let currentStatus = "OFFLINE";
-
-  try {
-
-    const res = await axios.get(API_URL, { timeout: 5000 });
-
-    if (res.status === 200) {
-      currentStatus = "ONLINE";
-    }
-
-  } catch {}
-
-  if (currentStatus === "ONLINE" && !onlineSince) {
-    onlineSince = Date.now();
-  }
-
-  if (currentStatus === "OFFLINE") {
-    onlineSince = null;
-  }
-
-  if (currentStatus === lastStatus) return;
-
-  lastStatus = currentStatus;
-
-  console.log("Status changed →", currentStatus);
-
-  await renameThread(channel, currentStatus);
-
-  const embed = buildEmbed(currentStatus);
-
-  try {
-
-    await statusMessage.edit({ embeds: [embed] });
-
-  } catch (err) {
-
-    console.log("Edit failed:", err.message);
-
-  }
-
-}
-
-client.once("clientReady", async () => {
-
-  console.log("Bot connected:", client.user.tag);
-
-  const channel = await client.channels.fetch(CHANNEL_ID);
-
-  const messages = await channel.messages.fetch({ limit: 20 });
-
-  statusMessage = messages.find(
-    m =>
-      m.author.id === client.user.id &&
-      !m.system
-  );
+  const status = await fetchStatus();
 
   if (!statusMessage) {
-
-    statusMessage = await channel.send({
-      embeds: [buildEmbed("OFFLINE")]
-    });
-
-    console.log("Created status message");
-
-  } else {
-
+    const channel = await client.channels.fetch(CHANNEL_ID);
+    statusMessage = await channel.messages.fetch(MESSAGE_ID);
     console.log("Reusing existing message");
-
   }
 
-  setInterval(() => checkHealth(channel), CHECK_INTERVAL);
+  // update embed every check
+  await statusMessage.edit({
+    embeds: [buildEmbed(status)],
+  });
 
-  checkHealth(channel);
+  // rename thread ONLY if status changed
+  if (status !== lastStatus) {
+    const thread = statusMessage.channel;
 
+    const newName =
+      status === "ONLINE"
+        ? "🟢 Predictions: Online"
+        : "🔴 Predictions: Offline";
+
+    try {
+      await thread.setName(newName);
+      console.log(`Thread renamed → ${newName}`);
+    } catch (e) {
+      console.log("Thread rename failed:", e.message);
+    }
+
+    console.log(`Status changed → ${status}`);
+    lastStatus = status;
+  } else {
+    console.log("Status unchanged");
+  }
+}
+
+/* ================================
+   READY EVENT
+================================ */
+
+client.once("clientReady", async () => {
+  console.log(`Bot connected: ${client.user.tag}`);
+
+  // run immediately
+  await checkHealth();
+
+  // prevent duplicate intervals after reconnects
+  if (!intervalStarted) {
+    intervalStarted = true;
+
+    setInterval(async () => {
+      console.log("Running scheduled health check...");
+      await checkHealth();
+    }, CHECK_INTERVAL);
+  }
 });
 
-client.login(TOKEN);
+/* ================================
+   LOGIN
+================================ */
+
+client.login(process.env.DISCORD_TOKEN);
