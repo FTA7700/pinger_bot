@@ -1,120 +1,88 @@
-console.log("BOT PROCESS STARTED");
-
-const { Client, GatewayIntentBits } = require("discord.js");
-const axios = require("axios");
-
-// ===============================
-// ENVIRONMENT VARIABLES
-// ===============================
+require('dotenv').config();
+const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const THREAD_ID = process.env.THREAD_ID;
-
-if (!DISCORD_TOKEN) {
-  console.error("DISCORD_TOKEN missing");
-  process.exit(1);
-}
-
-if (!THREAD_ID) {
-  console.error("THREAD_ID missing");
-  process.exit(1);
-}
-
-// ===============================
-// CONFIG
-// ===============================
-
-const HEALTH_URL =
-  "https://predictionsproject.onrender.com/api/health";
-
-const CHECK_INTERVAL = 30000; // 30 seconds
-
-// ===============================
-// STATE MEMORY
-// ===============================
-
-let lastStatus = null;
-let threadChannel = null;
-
-// ===============================
-// DISCORD CLIENT
-// ===============================
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
-// ===============================
-// HEALTH CHECK
-// ===============================
+let statusMessageId = null;
 
-async function checkHealth() {
-
-  let currentStatus = "OFFLINE";
-
-  try {
-    const res = await axios.get(HEALTH_URL, { timeout: 5000 });
-
-    if (res.status === 200) {
-      currentStatus = "ONLINE";
-    }
-  } catch {}
-
-  // ---- ZERO DUPLICATE UPDATER ----
-  if (currentStatus === lastStatus) {
-    return;
-  }
-
-  lastStatus = currentStatus;
-
-  const newName =
-    currentStatus === "ONLINE"
-      ? "🟢 Predictions: Online"
-      : "🔴 Predictions: Offline";
-
-  try {
-    await threadChannel.setName(newName);
-    console.log("Thread renamed →", newName);
-  } catch (err) {
-    console.log("Rename error:", err.message);
-  }
+// ---------- STATUS CHECK ----------
+async function getStatus() {
+  // replace with your real health check if needed
+  return {
+    online: true,
+    uptime: process.uptime()
+  };
 }
 
-// ===============================
-// READY EVENT
-// ===============================
+// ---------- EMBED BUILDER ----------
+function buildEmbed(status) {
+  return new EmbedBuilder()
+    .setTitle('Predictions Service Status')
+    .setColor(status.online ? 0x57F287 : 0xED4245)
+    .addFields(
+      {
+        name: 'Status',
+        value: status.online
+          ? '🟢 Predictions: Online'
+          : '🔴 Predictions: Offline'
+      },
+      {
+        name: 'Uptime',
+        value: `${Math.floor(status.uptime)}s`
+      },
+      {
+        name: 'Status Page',
+        value: 'https://m7owxr70.status.cron-job.org/'
+      }
+    )
+    .setTimestamp();
+}
 
-client.once("ready", async () => {
-
-  console.log("Bot connected:", client.user.tag);
-
+// ---------- UPDATE MESSAGE ----------
+async function updateStatus() {
   try {
-    console.log("Fetching thread:", THREAD_ID);
+    const thread = await client.channels.fetch(THREAD_ID);
 
-    threadChannel = await client.channels.fetch(THREAD_ID);
-
-    if (!threadChannel) {
-      console.log("Thread not found");
+    if (!thread) {
+      console.log('Thread not found');
       return;
     }
 
-    console.log("Thread found:", threadChannel.name);
+    const status = await getStatus();
+    const embed = buildEmbed(status);
 
-    // start monitor
-    setInterval(checkHealth, CHECK_INTERVAL);
+    // FIRST RUN → create message
+    if (!statusMessageId) {
+      const msg = await thread.send({ embeds: [embed] });
+      statusMessageId = msg.id;
+      console.log('Status message created:', statusMessageId);
+      return;
+    }
 
-    await checkHealth();
+    // EDIT EXISTING MESSAGE
+    const message = await thread.messages.fetch(statusMessageId);
+    await message.edit({ embeds: [embed] });
 
-    console.log("Health monitor started");
-
+    console.log('Status message updated');
   } catch (err) {
-    console.log("READY ERROR:", err.message);
+    console.error('Update failed:', err.message);
   }
+}
 
+// ---------- READY ----------
+client.once('clientReady', async () => {
+  console.log(`Bot connected: ${client.user.tag}`);
+
+  await updateStatus();
+
+  // update every 60 seconds
+  setInterval(updateStatus, 60000);
 });
 
-// ===============================
-// LOGIN
-// ===============================
-
+// ---------- LOGIN ----------
 client.login(DISCORD_TOKEN);
