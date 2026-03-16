@@ -5,7 +5,6 @@ const TOKEN = process.env.BOT_TOKEN;
 const CHANNEL_ID = process.env.CHANNEL_ID;
 
 const API_URL = "https://predictionsproject.onrender.com/api/health";
-
 const STATUS_PAGE = "https://m76wrx70.status.cron-job.org/";
 
 const CHECK_INTERVAL = 30000;
@@ -66,6 +65,28 @@ function buildEmbed(status) {
     .setTimestamp();
 }
 
+async function renameThread(channel, status) {
+
+  const newName =
+    status === "ONLINE"
+      ? "🟢 Predictions: Online"
+      : "🔴 Predictions: Offline";
+
+  if (channel.name === newName) return;
+
+  try {
+
+    await channel.setName(newName);
+
+    console.log("Thread renamed →", newName);
+
+  } catch (err) {
+
+    console.log("Rename failed:", err.message);
+
+  }
+}
+
 async function checkHealth(channel) {
 
   let currentStatus = "OFFLINE";
@@ -94,12 +115,18 @@ async function checkHealth(channel) {
 
   console.log("Status changed →", currentStatus);
 
+  await renameThread(channel, currentStatus);
+
   const embed = buildEmbed(currentStatus);
 
   try {
+
     await statusMessage.edit({ embeds: [embed] });
+
   } catch (err) {
+
     console.log("Edit failed:", err.message);
+
   }
 
 }
