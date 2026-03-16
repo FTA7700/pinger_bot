@@ -1,14 +1,13 @@
 {
   "name": "discord-status-bot",
   "version": "1.0.0",
-  "description": "Discord thread status monitor",
   "main": "bot.js",
   "scripts": {
     "start": "node server.js & node bot.js"
   },
   "dependencies": {
-    "axios": "^1.6.0",
-    "discord.js": "^14.15.3",
+    "axios": "^1.6.8",
+    "discord.js": "^14.14.1",
     "express": "^4.19.2"
   }
 }
