@@ -1,13 +1,17 @@
+console.log("BOT PROCESS STARTED");
+
 const { Client, GatewayIntentBits } = require("discord.js");
 const axios = require("axios");
 
-/* ========= ENV ========= */
+// ===============================
+// ENVIRONMENT VARIABLES
+// ===============================
 
-const TOKEN = process.env.BOT_TOKEN;
+const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const THREAD_ID = process.env.THREAD_ID;
 
-if (!TOKEN) {
-  console.error("BOT_TOKEN missing");
+if (!DISCORD_TOKEN) {
+  console.error("DISCORD_TOKEN missing");
   process.exit(1);
 }
 
@@ -16,87 +20,101 @@ if (!THREAD_ID) {
   process.exit(1);
 }
 
-/* ========= CONFIG ========= */
+// ===============================
+// CONFIG
+// ===============================
 
 const HEALTH_URL =
   "https://predictionsproject.onrender.com/api/health";
 
 const CHECK_INTERVAL = 30000; // 30 seconds
 
-/* ========= STATE ========= */
+// ===============================
+// STATE MEMORY
+// ===============================
 
 let lastStatus = null;
+let threadChannel = null;
 
-/* ========= DISCORD ========= */
+// ===============================
+// DISCORD CLIENT
+// ===============================
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds],
+  intents: [GatewayIntentBits.Guilds]
 });
 
-/* ========= HEALTH CHECK ========= */
+// ===============================
+// HEALTH CHECK
+// ===============================
 
-async function getStatus() {
+async function checkHealth() {
+
+  let currentStatus = "OFFLINE";
+
   try {
     const res = await axios.get(HEALTH_URL, { timeout: 5000 });
-    if (res.status === 200) return "ONLINE";
+
+    if (res.status === 200) {
+      currentStatus = "ONLINE";
+    }
   } catch {}
 
-  return "OFFLINE";
-}
-
-/* ========= UPDATE THREAD ========= */
-
-async function updateThread(status) {
-  const thread = await client.channels.fetch(THREAD_ID);
-
-  if (!thread) {
-    console.log("Thread not found");
+  // ---- ZERO DUPLICATE UPDATER ----
+  if (currentStatus === lastStatus) {
     return;
   }
 
+  lastStatus = currentStatus;
+
   const newName =
-    status === "ONLINE"
+    currentStatus === "ONLINE"
       ? "🟢 Predictions: Online"
       : "🔴 Predictions: Offline";
 
-  if (thread.name === newName) return;
-
-  await thread.setName(newName);
-
-  console.log("Thread renamed →", newName);
+  try {
+    await threadChannel.setName(newName);
+    console.log("Thread renamed →", newName);
+  } catch (err) {
+    console.log("Rename error:", err.message);
+  }
 }
 
-/* ========= LOOP ========= */
-
-async function checkLoop() {
-  const status = await getStatus();
-
-  if (status === lastStatus) return;
-
-  lastStatus = status;
-
-  console.log("Status changed →", status);
-
-  await updateThread(status);
-}
-
-/* ========= READY ========= */
+// ===============================
+// READY EVENT
+// ===============================
 
 client.once("ready", async () => {
+
   console.log("Bot connected:", client.user.tag);
 
   try {
-    const thread = await client.channels.fetch(THREAD_ID);
-    console.log("Monitoring thread:", thread.name);
+    console.log("Fetching thread:", THREAD_ID);
 
-    await checkLoop();
-    setInterval(checkLoop, CHECK_INTERVAL);
+    threadChannel = await client.channels.fetch(THREAD_ID);
+
+    if (!threadChannel) {
+      console.log("Thread not found");
+      return;
+    }
+
+    console.log("Thread found:", threadChannel.name);
+
+    // start monitor
+    setInterval(checkHealth, CHECK_INTERVAL);
+
+    await checkHealth();
+
+    console.log("Health monitor started");
 
   } catch (err) {
-    console.error("Startup error:", err.message);
+    console.log("READY ERROR:", err.message);
   }
+
 });
 
-/* ========= LOGIN ========= */
+// ===============================
+// LOGIN
+// ===============================
 
-client.login(TOKEN);
+client.login(DISCORD_TOKEN);
