@@ -1,10 +1,12 @@
 const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js");
 const axios = require("axios");
 
-// ================= CONFIG =================
+// =====================
+// ENV
+// =====================
 
 const TOKEN = process.env.BOT_TOKEN;
-const THREAD_ID = "1482085188702965942";
+const CHANNEL_ID = process.env.CHANNEL_ID;
 
 const API_URL =
   "https://predictionsproject.onrender.com/api/health";
@@ -12,21 +14,27 @@ const API_URL =
 const STATUS_PAGE =
   "https://m76wrx70.status.cron-job.org/";
 
-const CHECK_INTERVAL = 30000; // 30s
+const CHECK_INTERVAL = 30000;
 
-// ================= STATE =================
+// =====================
+// STATE
+// =====================
 
 let lastStatus = null;
 let onlineSince = null;
 let statusMessage = null;
 
-// ================= DISCORD =================
+// =====================
+// CLIENT
+// =====================
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds],
 });
 
-// ================= HELPERS =================
+// =====================
+// HELPERS
+// =====================
 
 function formatUptime(ms) {
   if (!ms) return "0s";
@@ -70,20 +78,38 @@ function buildEmbed(status) {
     .setTimestamp();
 }
 
-// ================= HEALTH CHECK =================
+// =====================
+// RENAME CHANNEL / THREAD
+// =====================
 
-async function checkHealth() {
+async function renameChannel(channel, status) {
+  const newName =
+    status === "ONLINE"
+      ? "🟢 API Online"
+      : "🔴 API Offline";
+
+  if (channel.name === newName) return;
+
+  try {
+    await channel.setName(newName);
+    console.log("Channel renamed →", newName);
+  } catch (err) {
+    console.log("Rename failed:", err.message);
+  }
+}
+
+// =====================
+// HEALTH CHECK
+// =====================
+
+async function checkHealth(channel) {
   let currentStatus = "OFFLINE";
 
   try {
     const res = await axios.get(API_URL, { timeout: 5000 });
-
-    if (res.status === 200) {
-      currentStatus = "ONLINE";
-    }
+    if (res.status === 200) currentStatus = "ONLINE";
   } catch {}
 
-  // uptime tracking
   if (currentStatus === "ONLINE" && !onlineSince) {
     onlineSince = Date.now();
   }
@@ -92,43 +118,45 @@ async function checkHealth() {
     onlineSince = null;
   }
 
-  // ZERO-DUPLICATE SMART UPDATE
   if (currentStatus === lastStatus) return;
 
   lastStatus = currentStatus;
 
   console.log("Status changed →", currentStatus);
 
-  const thread = await client.channels.fetch(THREAD_ID);
-
-  // rename thread
-  const newName =
-    currentStatus === "ONLINE"
-      ? "🟢 Predictions: Online"
-      : "🔴 Predictions: Offline";
-
-  await thread.setName(newName);
+  // rename thread/channel
+  await renameChannel(channel, currentStatus);
 
   // update embed
   const embed = buildEmbed(currentStatus);
-  await statusMessage.edit({ embeds: [embed] });
+
+  try {
+    await statusMessage.edit({ embeds: [embed] });
+  } catch (err) {
+    console.log("Edit failed:", err.message);
+  }
 }
 
-// ================= READY =================
+// =====================
+// READY
+// =====================
 
-client.once("ready", async () => {
+client.once("clientReady", async () => {
   console.log("Bot connected:", client.user.tag);
 
-  const thread = await client.channels.fetch(THREAD_ID);
+  const channel = await client.channels.fetch(CHANNEL_ID);
 
-  const messages = await thread.messages.fetch({ limit: 20 });
+  // find existing bot message
+  const messages = await channel.messages.fetch({ limit: 20 });
 
   statusMessage = messages.find(
-    (m) => m.author.id === client.user.id
+    (m) =>
+      m.author.id === client.user.id &&
+      !m.system
   );
 
   if (!statusMessage) {
-    statusMessage = await thread.send({
+    statusMessage = await channel.send({
       embeds: [buildEmbed("OFFLINE")],
     });
 
@@ -137,10 +165,14 @@ client.once("ready", async () => {
     console.log("Reusing existing message");
   }
 
-  setInterval(checkHealth, CHECK_INTERVAL);
-  checkHealth();
+  // start monitoring
+  setInterval(() => checkHealth(channel), CHECK_INTERVAL);
+
+  checkHealth(channel);
 });
 
-// ================= START =================
+// =====================
+// LOGIN
+// =====================
 
 client.login(TOKEN);
