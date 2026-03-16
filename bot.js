@@ -1,142 +1,102 @@
 const { Client, GatewayIntentBits } = require("discord.js");
 const axios = require("axios");
 
-/* =========================
-   ENV VARIABLES (Render)
-========================= */
+/* ========= ENV ========= */
 
-const TOKEN = process.env.DISCORD_TOKEN;
+const TOKEN = process.env.BOT_TOKEN;
 const THREAD_ID = process.env.THREAD_ID;
 
 if (!TOKEN) {
-  console.log("DISCORD_TOKEN missing");
+  console.error("BOT_TOKEN missing");
   process.exit(1);
 }
 
 if (!THREAD_ID) {
-  console.log("THREAD_ID missing");
+  console.error("THREAD_ID missing");
   process.exit(1);
 }
 
-/* =========================
-   CONFIG
-========================= */
+/* ========= CONFIG ========= */
 
 const HEALTH_URL =
   "https://predictionsproject.onrender.com/api/health";
 
-const CHECK_INTERVAL = 30000; // 30s
+const CHECK_INTERVAL = 30000; // 30 seconds
 
-/* =========================
-   STATE MEMORY
-========================= */
+/* ========= STATE ========= */
 
 let lastStatus = null;
-let onlineSince = null;
 
-/* =========================
-   DISCORD CLIENT
-========================= */
+/* ========= DISCORD ========= */
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds]
+  intents: [GatewayIntentBits.Guilds],
 });
 
-/* =========================
-   HELPERS
-========================= */
+/* ========= HEALTH CHECK ========= */
 
-function buildThreadName(status) {
-  return status === "ONLINE"
-    ? "🟢 Predictions: Online"
-    : "🔴 Predictions: Offline";
-}
-
-/* =========================
-   HEALTH CHECK
-========================= */
-
-async function checkHealth() {
-
-  let currentStatus = "OFFLINE";
-
+async function getStatus() {
   try {
     const res = await axios.get(HEALTH_URL, { timeout: 5000 });
-
-    if (res.status === 200) {
-      currentStatus = "ONLINE";
-    }
+    if (res.status === 200) return "ONLINE";
   } catch {}
 
-  // uptime tracking (internal only)
-  if (currentStatus === "ONLINE" && !onlineSince) {
-    onlineSince = Date.now();
-  }
+  return "OFFLINE";
+}
 
-  if (currentStatus === "OFFLINE") {
-    onlineSince = null;
-  }
+/* ========= UPDATE THREAD ========= */
 
-  // ZERO-DUPLICATE UPDATE
-  if (currentStatus === lastStatus) {
+async function updateThread(status) {
+  const thread = await client.channels.fetch(THREAD_ID);
+
+  if (!thread) {
+    console.log("Thread not found");
     return;
   }
 
-  lastStatus = currentStatus;
+  const newName =
+    status === "ONLINE"
+      ? "🟢 Predictions: Online"
+      : "🔴 Predictions: Offline";
 
-  console.log("Status changed →", currentStatus);
+  if (thread.name === newName) return;
 
-  try {
+  await thread.setName(newName);
 
-    const thread = await client.channels.fetch(THREAD_ID);
-
-    if (!thread) {
-      console.log("Thread not found");
-      return;
-    }
-
-    const newName = buildThreadName(currentStatus);
-
-    await thread.setName(newName);
-
-    console.log("Thread renamed →", newName);
-
-  } catch (err) {
-    console.log("Rename error:", err.message);
-  }
+  console.log("Thread renamed →", newName);
 }
 
-/* =========================
-   READY EVENT
-========================= */
+/* ========= LOOP ========= */
+
+async function checkLoop() {
+  const status = await getStatus();
+
+  if (status === lastStatus) return;
+
+  lastStatus = status;
+
+  console.log("Status changed →", status);
+
+  await updateThread(status);
+}
+
+/* ========= READY ========= */
 
 client.once("ready", async () => {
-
   console.log("Bot connected:", client.user.tag);
 
   try {
-
     const thread = await client.channels.fetch(THREAD_ID);
-
-    if (!thread) {
-      console.log("Thread fetch failed");
-      return;
-    }
-
     console.log("Monitoring thread:", thread.name);
 
-    // start monitor loop
-    setInterval(checkHealth, CHECK_INTERVAL);
-
-    await checkHealth();
+    await checkLoop();
+    setInterval(checkLoop, CHECK_INTERVAL);
 
   } catch (err) {
-    console.log("READY ERROR:", err.message);
+    console.error("Startup error:", err.message);
   }
 });
 
-/* =========================
-   LOGIN
-========================= */
+/* ========= LOGIN ========= */
 
 client.login(TOKEN);
