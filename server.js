@@ -4,7 +4,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.get("/", (req, res) => {
-  res.send("Keepalive server running");
+  res.send("running");
 });
 
 app.listen(PORT, () => {
