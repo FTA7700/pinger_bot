@@ -8,6 +8,6 @@
   "dependencies": {
     "discord.js": "^14.14.1",
     "dotenv": "^16.4.5",
-    "canvas": "^3.2.1"
+    "@napi-rs/canvas": "^0.1.53"
   }
 }
