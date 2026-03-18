@@ -34,20 +34,16 @@ async function fetchJobData() {
   const jobData     = await jobRes.json();
   const historyData = await historyRes.json();
 
-  // API returns { jobDetails: { ... } }
   const job     = jobData.jobDetails;
   const history = historyData.history ?? [];
 
-  // Latest check status
   const isOnline = job.lastStatus === 1;
 
-  // Uptime % from history
   const successful = history.filter(h => h.status === 1).length;
   const uptimePct  = history.length > 0
     ? ((successful / history.length) * 100).toFixed(1)
     : "N/A";
 
-  // Last incident = most recent failed check
   const lastIncident = history.find(h => h.status !== 1);
   const lastIncidentStr = lastIncident
     ? `<t:${lastIncident.date}:R>`
@@ -63,8 +59,16 @@ async function fetchJobData() {
 async function run() {
   const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-  await client.login(DISCORD_TOKEN);
-  await new Promise(resolve => client.once("clientReady", resolve));
+  // Wait for ready with a timeout fallback
+  await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error("Login timeout")), 15000);
+    client.once("ready", () => {
+      clearTimeout(timeout);
+      resolve();
+    });
+    client.login(DISCORD_TOKEN).catch(reject);
+  });
+
   console.log(`Logged in as ${client.user.tag}`);
 
   try {
@@ -104,4 +108,7 @@ async function run() {
   }
 }
 
-run();
+run().catch(err => {
+  console.error("Fatal:", err.message);
+  process.exit(1);
+});
