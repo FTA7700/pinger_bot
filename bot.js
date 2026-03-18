@@ -55,7 +55,7 @@ async function generateChart(history, count = 30) {
   const colors  = recent.map(h => h.status === 1 ? "#23a55a" : "#da373c");
   const heights = recent.map(h => h.status === 1 ? 100 : 40);
 
-  const chart = new ChartJSNodeCanvas({ width: 520, height: 80, backgroundColour: "#2b2d31" });
+  const chart = new ChartJSNodeCanvas({ width: 520, height: 80, backgroundColour: "transparent" });
 
   return chart.renderToBuffer({
     type: "bar",
@@ -218,7 +218,7 @@ async function run() {
       const message = await thread.messages.fetch(MESSAGE_ID);
 
       await Promise.all([
-        message.edit({ embeds: [embed], files: [attachment] }),
+        message.edit({ embeds: [embed], files: [attachment], attachments: [] }),
         thread.setName(`${statusEmoji} Predictions: ${statusText}`)
       ]);
 
