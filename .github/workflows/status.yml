@@ -1,0 +1,31 @@
+name: Discord Status Update
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'   # every 5 minutes
+  workflow_dispatch:         # also allows manual trigger from GitHub UI
+
+jobs:
+  update-status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run status update
+        env:
+          DISCORD_TOKEN:   ${{ secrets.DISCORD_TOKEN }}
+          THREAD_ID:       ${{ secrets.THREAD_ID }}
+          MESSAGE_ID:      ${{ secrets.MESSAGE_ID }}
+          CRONJOB_API_KEY: ${{ secrets.CRONJOB_API_KEY }}
+          CRONJOB_JOB_ID:  ${{ secrets.CRONJOB_JOB_ID }}
+        run: node bot.js
