@@ -75,11 +75,11 @@ function generateImage({ isOnline, continuousUptime, responseTime, uptimePct, in
   ctx.fill();
 
   ctx.fillStyle = TEXT;
-  ctx.font = "bold 15px Arial";
+  ctx.font = "bold 15px sans-serif";
   ctx.fillText(`Predictions: ${isOnline ? "Online" : "Offline"}`, 38, 33);
 
   ctx.fillStyle = MUTED;
-  ctx.font = "11px Arial";
+  ctx.font = "11px sans-serif";
   ctx.textAlign = "right";
   ctx.fillText("updated just now", W - 20, 33);
   ctx.textAlign = "left";
@@ -99,17 +99,17 @@ function generateImage({ isOnline, continuousUptime, responseTime, uptimePct, in
     ctx.fill();
 
     ctx.fillStyle = MUTED;
-    ctx.font = "11px Arial";
+    ctx.font = "11px sans-serif";
     ctx.fillText(c.label, x + 10, cardY + 16);
 
     ctx.fillStyle = c.color;
-    ctx.font = "bold 14px Arial";
+    ctx.font = "bold 14px sans-serif";
     ctx.fillText(c.value, x + 10, cardY + 36);
   });
 
   // Chart label
   ctx.fillStyle = MUTED;
-  ctx.font = "11px Arial";
+  ctx.font = "11px sans-serif";
   ctx.fillText("Last 30 checks", 16, 118);
 
   // Bar chart
@@ -149,7 +149,7 @@ function generateImage({ isOnline, continuousUptime, responseTime, uptimePct, in
     : `${incidentCount} incident${incidentCount > 1 ? "s" : ""} · last ${formatDuration(Date.now() / 1000 - lastIncidentTs)} ago`;
 
   ctx.fillStyle = MUTED;
-  ctx.font = "11px Arial";
+  ctx.font = "11px sans-serif";
   ctx.fillText(incidentText, 16, 194);
 
   ctx.fillStyle = LINK;
@@ -270,7 +270,7 @@ async function run() {
       const message = await thread.messages.fetch(MESSAGE_ID);
 
       await Promise.all([
-        message.edit({ content, files: [attachment], attachments: [] }),
+        message.edit({ content, files: [attachment], attachments: [], embeds: [] }),
         thread.setName(`${statusEmoji} Predictions: ${statusText}`)
       ]);
 
