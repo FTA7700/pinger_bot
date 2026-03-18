@@ -145,24 +145,59 @@ function generateImage({ isOnline, continuousUptime, responseTime, uptimePct, in
 
   const count  = Math.min(history.length, MAX_HISTORY);
   const recent = history.slice(0, count).reverse();
-  const bx = 20, by = 128, bw = W - 40, bh = 44;
-  const barW = Math.floor((bw - (count - 1) * 3) / count);
+  const bx = 20, by = 124, bw = W - 40, bh = 54;
 
+  // Red incident columns
   recent.forEach((h, i) => {
-    const barH = h.status === 1 ? bh : Math.floor(bh * 0.3);
-    const x    = bx + i * (barW + 3);
-    const y    = by + (bh - barH);
-    ctx.fillStyle = h.status === 1 ? GREEN : RED;
-    ctx.fillRect(x, y, barW, barH);
+    if (h.status !== 1) {
+      const x = bx + (i / Math.max(recent.length - 1, 1)) * bw;
+      ctx.fillStyle = "rgba(218,55,60,0.35)";
+      ctx.fillRect(x - 5, by, 10, bh);
+    }
   });
 
-  ctx.fillStyle = MUTED;
-  ctx.font = "10px UI";
-  ctx.textAlign = "left";
-  ctx.fillText(`${count} checks ago`, bx, by + bh + 14);
-  ctx.textAlign = "right";
-  ctx.fillText("now", bx + bw, by + bh + 14);
-  ctx.textAlign = "center";
+  // Y positions based on response time
+  const validTimes = recent.filter(h => h.status === 1).map(h => h.duration);
+  const maxTime = validTimes.length > 0 ? Math.max(...validTimes) * 1.2 : 1000;
+
+  const pts = recent.map((h, i) => ({
+    x: bx + (i / Math.max(recent.length - 1, 1)) * bw,
+    y: h.status === 1 ? by + bh - (h.duration / maxTime) * (bh - 6) : null
+  }));
+
+  // Filled gradient area
+  const grad = ctx.createLinearGradient(0, by, 0, by + bh);
+  grad.addColorStop(0, "rgba(35,165,90,0.5)");
+  grad.addColorStop(1, "rgba(35,165,90,0.02)");
+
+  ctx.beginPath();
+  let areaStarted = false;
+  pts.forEach(p => {
+    if (!p.y) { areaStarted = false; return; }
+    if (!areaStarted) { ctx.moveTo(p.x, by + bh); ctx.lineTo(p.x, p.y); areaStarted = true; }
+    else ctx.lineTo(p.x, p.y);
+  });
+  if (areaStarted) {
+    const lastValid = [...pts].reverse().find(p => p.y);
+    if (lastValid) ctx.lineTo(lastValid.x, by + bh);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+  }
+
+  // Line on top
+  ctx.beginPath();
+  let lineStarted = false;
+  pts.forEach(p => {
+    if (!p.y) { lineStarted = false; return; }
+    if (!lineStarted) { ctx.moveTo(p.x, p.y); lineStarted = true; }
+    else ctx.lineTo(p.x, p.y);
+  });
+  ctx.strokeStyle = GREEN;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+
 
   const incidentText = incidentCount === 0
     ? "No incidents recorded"
