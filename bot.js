@@ -3,7 +3,6 @@ require("dotenv").config();
 const { Client, GatewayIntentBits, AttachmentBuilder } = require("discord.js");
 const { createCanvas, registerFont } = require("canvas");
 const fs = require("fs");
-const path = require("path");
 const { execSync } = require("child_process");
 
 const DISCORD_TOKEN    = process.env.DISCORD_TOKEN;
@@ -15,82 +14,36 @@ const CRONJOB_API_KEY  = process.env.CRONJOB_API_KEY;
 const CRONJOB_JOB_ID   = process.env.CRONJOB_JOB_ID;
 const SETUP_MODE       = process.env.SETUP_MODE === "true";
 
-if (!DISCORD_TOKEN || !CRONJOB_API_KEY || !CRONJOB_JOB_ID) {
-  console.error("Missing required environment variables.");
-  process.exit(1);
-}
-if (!SETUP_MODE && (!THREAD_ID || !MESSAGE_ID)) {
-  console.error("THREAD_ID and MESSAGE_ID required unless SETUP_MODE=true");
-  process.exit(1);
-}
-if (SETUP_MODE && !FORUM_CHANNEL_ID) {
-  console.error("FORUM_CHANNEL_ID required for setup mode");
-  process.exit(1);
-}
+if (!DISCORD_TOKEN || !CRONJOB_API_KEY || !CRONJOB_JOB_ID) { console.error("Missing env vars."); process.exit(1); }
+if (!SETUP_MODE && (!THREAD_ID || !MESSAGE_ID)) { console.error("Missing THREAD_ID/MESSAGE_ID"); process.exit(1); }
+if (SETUP_MODE && !FORUM_CHANNEL_ID) { console.error("Missing FORUM_CHANNEL_ID"); process.exit(1); }
 
-// Register a font that actually exists on Ubuntu
 function setupFont() {
   const candidates = [
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+  ];
+  const boldCandidates = [
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
   ];
-  let regular = null, bold = null;
-  for (const f of candidates) {
-    if (fs.existsSync(f)) {
-      if (!regular && !f.includes("Bold")) { regular = f; }
-      if (!bold && f.includes("Bold")) { bold = f; }
-    }
-  }
-  if (!regular) {
-    // Find any ttf
-    try {
-      const found = execSync("find /usr/share/fonts -name '*.ttf' | head -2").toString().trim().split("\n");
-      regular = found[0] || null;
-      bold = found[1] || found[0] || null;
-    } catch(e) {}
-  }
-  if (regular) {
-    registerFont(regular, { family: "UI", weight: "normal" });
-    console.log(`Font registered: ${regular}`);
-  }
-  if (bold) {
-    registerFont(bold, { family: "UI", weight: "bold" });
-    console.log(`Bold font registered: ${bold}`);
-  }
-  return !!regular;
+  const reg  = candidates.find(f => fs.existsSync(f));
+  const bold = boldCandidates.find(f => fs.existsSync(f));
+  if (reg)  { registerFont(reg,  { family: "UI", weight: "normal" }); console.log("Font:", reg); }
+  if (bold) { registerFont(bold, { family: "UI", weight: "bold"   }); console.log("Bold:", bold); }
 }
 
 function formatDuration(seconds) {
   seconds = Math.floor(seconds);
-  const days    = Math.floor(seconds / 86400); seconds %= 86400;
-  const hours   = Math.floor(seconds / 3600);  seconds %= 3600;
-  const minutes = Math.floor(seconds / 60);    seconds %= 60;
-  const parts = [];
-  if (days)    parts.push(`${days}d`);
-  if (hours)   parts.push(`${hours}h`);
-  if (minutes) parts.push(`${minutes}m`);
-  if (seconds || parts.length === 0) parts.push(`${seconds}s`);
-  return parts.join(" ");
-}
-
-function fillRoundRect(ctx, x, y, w, h, r, color) {
-  ctx.save();
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.arcTo(x + w, y, x + w, y + r, r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
-  ctx.lineTo(x + r, y + h);
-  ctx.arcTo(x, y + h, x, y + h - r, r);
-  ctx.lineTo(x, y + r);
-  ctx.arcTo(x, y, x + r, y, r);
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
+  const days = Math.floor(seconds / 86400); seconds %= 86400;
+  const hrs  = Math.floor(seconds / 3600);  seconds %= 3600;
+  const mins = Math.floor(seconds / 60);    seconds %= 60;
+  const p = [];
+  if (days) p.push(`${days}d`);
+  if (hrs)  p.push(`${hrs}h`);
+  if (mins) p.push(`${mins}m`);
+  if (seconds || p.length === 0) p.push(`${seconds}s`);
+  return p.join(" ");
 }
 
 function generateImage({ isOnline, continuousUptime, responseTime, uptimePct, incidentCount, lastIncidentTs, history }) {
@@ -107,107 +60,93 @@ function generateImage({ isOnline, continuousUptime, responseTime, uptimePct, in
   const DIVIDER = "#3b3d44";
   const LINK    = "#00a8fc";
 
-  fillRoundRect(ctx, 0, 0, W, H, 10, BG);
+  // Background
+  ctx.fillStyle = BG;
+  ctx.fillRect(0, 0, W, H);
 
   // Status dot
-  ctx.save();
   ctx.fillStyle = isOnline ? GREEN : RED;
   ctx.beginPath();
   ctx.arc(24, 28, 6, 0, Math.PI * 2);
   ctx.fill();
-  ctx.restore();
 
   // Title
-  ctx.save();
   ctx.fillStyle = TEXT;
   ctx.font = "bold 15px UI";
+  ctx.textAlign = "left";
   ctx.fillText(`Predictions: ${isOnline ? "Online" : "Offline"}`, 38, 33);
-  ctx.restore();
 
   // Timestamp
-  ctx.save();
   ctx.fillStyle = MUTED;
   ctx.font = "11px UI";
   ctx.textAlign = "right";
   ctx.fillText("updated just now", W - 20, 33);
-  ctx.restore();
+  ctx.textAlign = "left";
 
-  // Stat cards
+  // Stat cards (simple rects, no rounded corners)
   const cards = [
     { label: "Uptime",   value: continuousUptime,                              color: TEXT  },
     { label: "Response", value: responseTime != null ? `${responseTime}ms` : "N/A", color: TEXT  },
     { label: "Uptime %", value: `${uptimePct}%`,                               color: GREEN }
   ];
-  const cardW = 148, cardH = 48, cardY = 48, gap = 8, x0 = 16;
+  const cW = 148, cH = 48, cY = 48, gap = 8, x0 = 16;
   cards.forEach((c, i) => {
-    const x = x0 + i * (cardW + gap);
-    fillRoundRect(ctx, x, cardY, cardW, cardH, 6, CARD_BG);
-
-    ctx.save();
+    const x = x0 + i * (cW + gap);
+    ctx.fillStyle = CARD_BG;
+    ctx.fillRect(x, cY, cW, cH);
     ctx.fillStyle = MUTED;
     ctx.font = "11px UI";
-    ctx.fillText(c.label, x + 10, cardY + 16);
-    ctx.restore();
-
-    ctx.save();
+    ctx.fillText(c.label, x + 10, cY + 16);
     ctx.fillStyle = c.color;
     ctx.font = "bold 14px UI";
-    ctx.fillText(c.value, x + 10, cardY + 36);
-    ctx.restore();
+    ctx.fillText(c.value, x + 10, cY + 36);
   });
 
   // Chart label
-  ctx.save();
   ctx.fillStyle = MUTED;
   ctx.font = "11px UI";
   ctx.fillText("Last 30 checks", 16, 118);
-  ctx.restore();
 
-  // Bars
+  // Bars (simple rects)
   const count  = 30;
   const recent = history.slice(0, count).reverse();
   const bx = 16, by = 124, bw = W - 32, bh = 36;
   const barW = Math.floor((bw - (count - 1) * 3) / count);
-
   recent.forEach((h, i) => {
     const barH = h.status === 1 ? bh : Math.floor(bh * 0.35);
     const x    = bx + i * (barW + 3);
     const y    = by + (bh - barH);
-    fillRoundRect(ctx, x, y, barW, barH, 2, h.status === 1 ? GREEN : RED);
+    ctx.fillStyle = h.status === 1 ? GREEN : RED;
+    ctx.fillRect(x, y, barW, barH);
   });
 
   // Axis labels
-  ctx.save();
   ctx.fillStyle = MUTED;
   ctx.font = "10px UI";
   ctx.fillText("30 checks ago", 16, 174);
   ctx.textAlign = "right";
   ctx.fillText("now", W - 16, 174);
-  ctx.restore();
+  ctx.textAlign = "left";
 
   // Divider
-  ctx.save();
   ctx.strokeStyle = DIVIDER;
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(16, 180);
   ctx.lineTo(W - 16, 180);
   ctx.stroke();
-  ctx.restore();
 
   // Footer
   const incidentText = incidentCount === 0
     ? "No incidents recorded"
     : `${incidentCount} incident${incidentCount > 1 ? "s" : ""} · last ${formatDuration(Date.now() / 1000 - lastIncidentTs)} ago`;
-
-  ctx.save();
   ctx.fillStyle = MUTED;
   ctx.font = "11px UI";
   ctx.fillText(incidentText, 16, 194);
   ctx.fillStyle = LINK;
   ctx.textAlign = "right";
-  ctx.fillText("status page →", W - 16, 194);
-  ctx.restore();
+  ctx.fillText("status page ->", W - 16, 194);
+  ctx.textAlign = "left";
 
   const buf = canvas.toBuffer("image/png");
   console.log(`Image buffer: ${buf.length} bytes`);
@@ -215,10 +154,7 @@ function generateImage({ isOnline, continuousUptime, responseTime, uptimePct, in
 }
 
 async function fetchJobData() {
-  const headers = {
-    "Authorization": `Bearer ${CRONJOB_API_KEY}`,
-    "Content-Type": "application/json"
-  };
+  const headers = { "Authorization": `Bearer ${CRONJOB_API_KEY}`, "Content-Type": "application/json" };
   const [jobRes, historyRes] = await Promise.all([
     fetch(`https://api.cron-job.org/jobs/${CRONJOB_JOB_ID}`, { headers }),
     fetch(`https://api.cron-job.org/jobs/${CRONJOB_JOB_ID}/history`, { headers })
@@ -228,7 +164,6 @@ async function fetchJobData() {
 
   const job     = (await jobRes.json()).jobDetails;
   const history = (await historyRes.json()).history ?? [];
-
   const isOnline     = job.lastStatus === 1;
   const responseTime = job.lastDuration ?? null;
   const successful   = history.filter(h => h.status === 1).length;
@@ -237,14 +172,11 @@ async function fetchJobData() {
   const lastIncident = incidents[0];
 
   let continuousUptime;
-  if (!isOnline) {
-    continuousUptime = "Offline";
-  } else if (!lastIncident) {
+  if (!isOnline) continuousUptime = "Offline";
+  else if (!lastIncident) {
     const oldest = history[history.length - 1];
     continuousUptime = oldest ? formatDuration(Date.now() / 1000 - oldest.date) + "+" : "N/A";
-  } else {
-    continuousUptime = formatDuration(Date.now() / 1000 - lastIncident.date);
-  }
+  } else continuousUptime = formatDuration(Date.now() / 1000 - lastIncident.date);
 
   const [latest, previous] = history;
   return {
@@ -258,8 +190,7 @@ async function fetchJobData() {
 }
 
 async function run() {
-  const fontOk = setupFont();
-  console.log(`Font setup: ${fontOk ? "ok" : "no font found"}`);
+  setupFont();
 
   const client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
@@ -313,7 +244,4 @@ async function run() {
   }
 }
 
-run().catch(err => {
-  console.error("Fatal:", err.message);
-  process.exit(1);
-});
+run().catch(err => { console.error("Fatal:", err.message); process.exit(1); });
