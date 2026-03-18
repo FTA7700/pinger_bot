@@ -1,7 +1,7 @@
 require("dotenv").config();
 
 const { Client, GatewayIntentBits, AttachmentBuilder } = require("discord.js");
-const { createCanvas, registerFont } = require("canvas");
+const { createCanvas, GlobalFonts } = require("@napi-rs/canvas");
 const fs = require("fs");
 const path = require("path");
 
@@ -19,12 +19,20 @@ if (!DISCORD_TOKEN || !THREAD_ID || !MESSAGE_ID) {
 }
 
 function setupFont() {
-  const reg  = ["/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-                "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"].find(f => fs.existsSync(f));
-  const bold = ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-                "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"].find(f => fs.existsSync(f));
-  if (reg)  registerFont(reg,  { family: "UI", weight: "normal" });
-  if (bold) registerFont(bold, { family: "UI", weight: "bold" });
+  const candidates = [
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+  ];
+  let loaded = 0;
+  for (const f of candidates) {
+    if (fs.existsSync(f)) {
+      GlobalFonts.registerFromPath(f, "UI");
+      loaded++;
+    }
+  }
+  console.log(`Fonts loaded: ${loaded}`);
 }
 
 function formatDuration(seconds) {
