@@ -15,6 +15,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Download history artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: history
+          path: .
+        continue-on-error: true
+
       - name: Install canvas dependencies
         run: |
           sudo apt-get update
@@ -35,7 +42,13 @@ jobs:
           MESSAGE_ID:       ${{ secrets.MESSAGE_ID }}
           CHANNEL_ID:       ${{ secrets.CHANNEL_ID }}
           FORUM_CHANNEL_ID: ${{ secrets.FORUM_CHANNEL_ID }}
-          CRONJOB_API_KEY:  ${{ secrets.CRONJOB_API_KEY }}
-          CRONJOB_JOB_ID:   ${{ secrets.CRONJOB_JOB_ID }}
           SETUP_MODE:       ${{ secrets.SETUP_MODE }}
         run: node bot.js
+
+      - name: Upload history artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: history
+          path: history.json
+          retention-days: 7
+        if: always()
