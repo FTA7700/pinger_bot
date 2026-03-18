@@ -1,7 +1,7 @@
 require("dotenv").config();
 
-const { Client, GatewayIntentBits, EmbedBuilder, AttachmentBuilder } = require("discord.js");
-const { ChartJSNodeCanvas } = require("chartjs-node-canvas");
+const { Client, GatewayIntentBits, AttachmentBuilder } = require("discord.js");
+const { createCanvas } = require("canvas");
 
 const DISCORD_TOKEN    = process.env.DISCORD_TOKEN;
 const THREAD_ID        = process.env.THREAD_ID;
@@ -18,17 +18,17 @@ if (!DISCORD_TOKEN || !CRONJOB_API_KEY || !CRONJOB_JOB_ID) {
 }
 
 if (!SETUP_MODE && (!THREAD_ID || !MESSAGE_ID)) {
-  console.error("THREAD_ID and MESSAGE_ID are required unless SETUP_MODE=true");
+  console.error("THREAD_ID and MESSAGE_ID required unless SETUP_MODE=true");
   process.exit(1);
 }
 
 if (SETUP_MODE && !FORUM_CHANNEL_ID) {
-  console.error("FORUM_CHANNEL_ID is required for setup mode");
+  console.error("FORUM_CHANNEL_ID required for setup mode");
   process.exit(1);
 }
 
 /* ===============================
-   UPTIME DURATION FORMATTER
+   UPTIME FORMATTER
 ================================ */
 
 function formatDuration(seconds) {
@@ -36,51 +36,142 @@ function formatDuration(seconds) {
   const days    = Math.floor(seconds / 86400); seconds %= 86400;
   const hours   = Math.floor(seconds / 3600);  seconds %= 3600;
   const minutes = Math.floor(seconds / 60);    seconds %= 60;
-
   const parts = [];
   if (days)    parts.push(`${days}d`);
   if (hours)   parts.push(`${hours}h`);
   if (minutes) parts.push(`${minutes}m`);
   if (seconds || parts.length === 0) parts.push(`${seconds}s`);
-
   return parts.join(" ");
 }
 
 /* ===============================
-   CHART IMAGE GENERATOR
+   IMAGE GENERATOR
 ================================ */
 
-async function generateChart(history, count = 30) {
-  const recent  = history.slice(0, count).reverse();
-  const colors  = recent.map(h => h.status === 1 ? "#23a55a" : "#da373c");
-  const heights = recent.map(h => h.status === 1 ? 100 : 40);
+function generateImage({ isOnline, continuousUptime, responseTime, uptimePct, incidentCount, lastIncidentTs, history }) {
+  const W = 520, H = 200;
+  const canvas = createCanvas(W, H);
+  const ctx = canvas.getContext("2d");
 
-  const chart = new ChartJSNodeCanvas({ width: 520, height: 80, backgroundColour: "#2f3136" });
+  const BG       = "#2b2d31";
+  const CARD_BG  = "#1e1f22";
+  const GREEN    = "#23a55a";
+  const RED      = "#da373c";
+  const TEXT     = "#f2f3f5";
+  const MUTED    = "#80848e";
+  const DIVIDER  = "#3b3d44";
+  const LINK     = "#00a8fc";
 
-  return chart.renderToBuffer({
-    type: "bar",
-    data: {
-      labels: recent.map(() => ""),
-      datasets: [{
-        data: heights,
-        backgroundColor: colors,
-        borderRadius: 2,
-        borderSkipped: "bottom",
-        barPercentage: 0.85,
-        categoryPercentage: 0.9
-      }]
-    },
-    options: {
-      responsive: false,
-      animation: false,
-      plugins: { legend: { display: false }, tooltip: { enabled: false } },
-      scales: {
-        x: { display: false },
-        y: { display: false, min: 0, max: 110 }
-      },
-      layout: { padding: { top: 4, bottom: 4, left: 4, right: 4 } }
-    }
+  // Background
+  ctx.fillStyle = BG;
+  roundRect(ctx, 0, 0, W, H, 10);
+  ctx.fill();
+
+  // Header — status dot + title + timestamp
+  const dotColor = isOnline ? GREEN : RED;
+  ctx.fillStyle = dotColor;
+  ctx.beginPath();
+  ctx.arc(24, 28, 6, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = TEXT;
+  ctx.font = "bold 15px Arial";
+  ctx.fillText(`Predictions: ${isOnline ? "Online" : "Offline"}`, 38, 33);
+
+  ctx.fillStyle = MUTED;
+  ctx.font = "11px Arial";
+  ctx.textAlign = "right";
+  ctx.fillText("updated just now", W - 20, 33);
+  ctx.textAlign = "left";
+
+  // Stat cards
+  const cards = [
+    { label: "Uptime",     value: continuousUptime,                     color: TEXT  },
+    { label: "Response",   value: responseTime != null ? `${responseTime}ms` : "N/A", color: TEXT  },
+    { label: "Uptime %",   value: `${uptimePct}%`,                      color: GREEN }
+  ];
+
+  const cardW = 148, cardH = 48, cardY = 48, cardGap = 8, cardX0 = 16;
+  cards.forEach((c, i) => {
+    const x = cardX0 + i * (cardW + cardGap);
+    ctx.fillStyle = CARD_BG;
+    roundRect(ctx, x, cardY, cardW, cardH, 6);
+    ctx.fill();
+
+    ctx.fillStyle = MUTED;
+    ctx.font = "11px Arial";
+    ctx.fillText(c.label, x + 10, cardY + 16);
+
+    ctx.fillStyle = c.color;
+    ctx.font = "bold 14px Arial";
+    ctx.fillText(c.value, x + 10, cardY + 36);
   });
+
+  // Chart label
+  ctx.fillStyle = MUTED;
+  ctx.font = "11px Arial";
+  ctx.fillText("Last 30 checks", 16, 118);
+
+  // Bar chart
+  const count   = 30;
+  const recent  = history.slice(0, count).reverse();
+  const barZone = { x: 16, y: 124, w: W - 32, h: 36 };
+  const barW    = Math.floor((barZone.w - (count - 1) * 3) / count);
+
+  recent.forEach((h, i) => {
+    const barH  = h.status === 1 ? barZone.h : Math.floor(barZone.h * 0.35);
+    const x     = barZone.x + i * (barW + 3);
+    const y     = barZone.y + (barZone.h - barH);
+    ctx.fillStyle = h.status === 1 ? GREEN : RED;
+    roundRect(ctx, x, y, barW, barH, 2);
+    ctx.fill();
+  });
+
+  // Chart axis labels
+  ctx.fillStyle = MUTED;
+  ctx.font      = "10px Arial";
+  ctx.fillText("30 checks ago", 16, 174);
+  ctx.textAlign = "right";
+  ctx.fillText("now", W - 16, 174);
+  ctx.textAlign = "left";
+
+  // Divider
+  ctx.strokeStyle = DIVIDER;
+  ctx.lineWidth   = 1;
+  ctx.beginPath();
+  ctx.moveTo(16, 180);
+  ctx.lineTo(W - 16, 180);
+  ctx.stroke();
+
+  // Footer
+  const incidentText = incidentCount === 0
+    ? "No incidents recorded"
+    : `${incidentCount} incident${incidentCount > 1 ? "s" : ""} · last ${formatDuration(Date.now() / 1000 - lastIncidentTs)} ago`;
+
+  ctx.fillStyle = MUTED;
+  ctx.font = "11px Arial";
+  ctx.fillText(incidentText, 16, 194);
+
+  ctx.fillStyle = LINK;
+  ctx.textAlign = "right";
+  ctx.fillText("status page →", W - 16, 194);
+  ctx.textAlign = "left";
+
+  return canvas.toBuffer("image/png");
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
 }
 
 /* ===============================
@@ -101,11 +192,8 @@ async function fetchJobData() {
   if (!jobRes.ok) throw new Error(`Job API error: ${jobRes.status}`);
   if (!historyRes.ok) throw new Error(`History API error: ${historyRes.status}`);
 
-  const jobData     = await jobRes.json();
-  const historyData = await historyRes.json();
-
-  const job     = jobData.jobDetails;
-  const history = historyData.history ?? [];
+  const job     = (await jobRes.json()).jobDetails;
+  const history = (await historyRes.json()).history ?? [];
 
   const isOnline     = job.lastStatus === 1;
   const responseTime = job.lastDuration ?? null;
@@ -115,25 +203,20 @@ async function fetchJobData() {
     ? ((successful / history.length) * 100).toFixed(1)
     : "N/A";
 
-  const incidents     = history.filter(h => h.status !== 1);
-  const incidentCount = incidents.length;
-  const lastIncident  = incidents[0];
+  const incidents      = history.filter(h => h.status !== 1);
+  const incidentCount  = incidents.length;
+  const lastIncident   = incidents[0];
+  const lastIncidentTs = lastIncident?.date ?? null;
 
   let continuousUptime;
   if (!isOnline) {
     continuousUptime = "Offline";
   } else if (!lastIncident) {
     const oldest = history[history.length - 1];
-    continuousUptime = oldest
-      ? formatDuration(Date.now() / 1000 - oldest.date) + "+"
-      : "N/A";
+    continuousUptime = oldest ? formatDuration(Date.now() / 1000 - oldest.date) + "+" : "N/A";
   } else {
     continuousUptime = formatDuration(Date.now() / 1000 - lastIncident.date);
   }
-
-  const incidentStr = incidentCount === 0
-    ? "None"
-    : `${incidentCount} total · last <t:${lastIncident.date}:R>`;
 
   const [latest, previous] = history;
   const justWentDown  = latest && previous && latest.status !== 1 && previous.status === 1;
@@ -141,49 +224,18 @@ async function fetchJobData() {
 
   return {
     isOnline, responseTime, uptimePct, continuousUptime,
-    incidentStr, justWentDown, justRecovered, history
+    incidentCount, lastIncidentTs, justWentDown, justRecovered, history
   };
 }
 
 /* ===============================
-   BUILD EMBED
-================================ */
-
-async function buildEmbed(data) {
-  const { isOnline, responseTime, uptimePct, continuousUptime, incidentStr, history } = data;
-
-  const statusEmoji = isOnline ? "🟢" : "🔴";
-  const statusText  = isOnline ? "Online" : "Offline";
-  const embedColor  = isOnline ? 0x23a55a : 0xda373c;
-  const responseStr = responseTime != null ? `${responseTime}ms` : "N/A";
-
-  const chartBuffer = await generateChart(history, 30);
-  console.log(`Chart buffer size: ${chartBuffer.length} bytes`);
-  const attachment  = new AttachmentBuilder(chartBuffer, { name: "status_chart.png" });
-
-  const embed = new EmbedBuilder()
-    .setTitle("Predictions Service Status")
-    .addFields(
-      { name: "Status",        value: `${statusEmoji} Predictions: ${statusText}` },
-      { name: "Uptime",        value: continuousUptime, inline: true },
-      { name: "Response Time", value: responseStr,      inline: true },
-      { name: "Uptime %",      value: `${uptimePct}%`,  inline: true },
-      { name: "Incidents",     value: incidentStr },
-      { name: "Status Page",   value: "https://1hys9555.status.cron-job.org/" }
-    )
-    .setImage("attachment://status_chart.png")
-    .setColor(embedColor)
-    .setTimestamp();
-
-  return { embed, attachment, statusEmoji, statusText };
-}
-
-/* ===============================
-   DISCORD UPDATE
+   DISCORD
 ================================ */
 
 async function run() {
-  const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
+  const client = new Client({
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
+  });
 
   await new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error("Login timeout")), 15000);
@@ -194,43 +246,42 @@ async function run() {
   console.log(`Logged in as ${client.user.tag}`);
 
   try {
-    const data = await fetchJobData();
-    const { embed, attachment, statusEmoji, statusText } = await buildEmbed(data);
-    const { justWentDown, justRecovered } = data;
+    const data       = await fetchJobData();
+    const imgBuffer  = generateImage(data);
+    const attachment = new AttachmentBuilder(imgBuffer, { name: "status.png" });
+
+    const statusEmoji = data.isOnline ? "🟢" : "🔴";
+    const statusText  = data.isOnline ? "Online" : "Offline";
+    const content     = "https://1hys9555.status.cron-job.org/";
 
     if (SETUP_MODE) {
-      // Create the forum post
       const forumChannel = await client.channels.fetch(FORUM_CHANNEL_ID);
       const thread = await forumChannel.threads.create({
         name: `${statusEmoji} Predictions: ${statusText}`,
-        message: { embeds: [embed], files: [attachment] }
+        message: { content, files: [attachment] }
       });
-
       const starterMessage = await thread.fetchStarterMessage();
-
       console.log("=== SETUP COMPLETE ===");
       console.log(`THREAD_ID=${thread.id}`);
       console.log(`MESSAGE_ID=${starterMessage.id}`);
-      console.log("Add these to your GitHub secrets, then set SETUP_MODE=false");
-
+      console.log("Add to GitHub secrets, then set SETUP_MODE=false");
     } else {
-      // Normal update mode
       const thread  = await client.channels.fetch(THREAD_ID);
       const message = await thread.messages.fetch(MESSAGE_ID);
 
       await Promise.all([
-        message.edit({ embeds: [embed], files: [attachment], attachments: [] }),
+        message.edit({ content, files: [attachment], attachments: [] }),
         thread.setName(`${statusEmoji} Predictions: ${statusText}`)
       ]);
 
       console.log(`Done — ${statusText}, uptime: ${data.continuousUptime}, ${data.uptimePct}%`);
 
-      if (CHANNEL_ID && (justWentDown || justRecovered)) {
+      if (CHANNEL_ID && (data.justWentDown || data.justRecovered)) {
         const channel = await client.channels.fetch(CHANNEL_ID);
-        if (justWentDown) {
-          await channel.send(`🔴 @here **Predictions service is DOWN!**`);
-        } else if (justRecovered) {
-          await channel.send(`🟢 **Predictions service has recovered.**`);
+        if (data.justWentDown) {
+          await channel.send("🔴 @here **Predictions service is DOWN!**");
+        } else if (data.justRecovered) {
+          await channel.send("🟢 **Predictions service has recovered.**");
         }
       }
     }
