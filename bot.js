@@ -109,7 +109,7 @@ function computeStats(history, currentCheck) {
 }
 
 function generateImage({ isOnline, continuousUptime, responseTime, uptimePct, incidentCount, lastIncidentTs, history }) {
-  const W = 520, H = 220;
+  const W = 520, H = 200;
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext("2d");
 
@@ -127,25 +127,25 @@ function generateImage({ isOnline, continuousUptime, responseTime, uptimePct, in
 
   ctx.fillStyle = dotColor;
   ctx.beginPath();
-  ctx.arc(W / 2, 34, 10, 0, Math.PI * 2);
+  ctx.arc(W / 2, 26, 10, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.fillStyle = TEXT;
   ctx.font = "bold 28px UI";
   ctx.textAlign = "center";
-  ctx.fillText(statusText, W / 2, 72);
+  ctx.fillText(statusText, W / 2, 62);
 
   ctx.fillStyle = dotColor;
   ctx.font = "bold 14px UI";
-  ctx.fillText(`${uptimePct}% uptime`, W / 2, 94);
+  ctx.fillText(`${uptimePct}% uptime`, W / 2, 80);
 
   ctx.fillStyle = MUTED;
   ctx.font = "12px UI";
-  ctx.fillText(`${continuousUptime}  ·  ${responseTime}ms`, W / 2, 114);
+  ctx.fillText(`${continuousUptime}  ·  ${responseTime}ms`, W / 2, 96);
 
   const count  = Math.min(history.length, MAX_HISTORY);
   const recent = history.slice(0, count).reverse();
-  const bx = 20, by = 124, bw = W - 40, bh = 54;
+  const bx = 20, by = 106, bw = W - 40, bh = 62;
 
   // Red incident columns
   recent.forEach((h, i) => {
@@ -197,6 +197,15 @@ function generateImage({ isOnline, continuousUptime, responseTime, uptimePct, in
   ctx.lineWidth = 2;
   ctx.stroke();
 
+  // Last check timestamp (right side)
+  const lastCheckDate = new Date(history[0].date * 1000);
+  const timeStr = lastCheckDate.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  ctx.fillStyle = MUTED;
+  ctx.font = "10px UI";
+  ctx.textAlign = "right";
+  ctx.fillText(`last check ${timeStr}`, bx + bw, by + bh + 13);
+  ctx.textAlign = "center";
+
 
 
   const incidentText = incidentCount === 0
@@ -204,7 +213,7 @@ function generateImage({ isOnline, continuousUptime, responseTime, uptimePct, in
     : `${incidentCount} incident${incidentCount > 1 ? "s" : ""} · last ${formatDuration(Date.now() / 1000 - lastIncidentTs)} ago`;
   ctx.fillStyle = MUTED;
   ctx.font = "11px UI";
-  ctx.fillText(incidentText, W / 2, 210);
+  ctx.fillText(incidentText, W / 2, 195);
 
   const buf = canvas.toBuffer("image/png");
   console.log(`Image buffer: ${buf.length} bytes`);
