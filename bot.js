@@ -1,7 +1,10 @@
 require("dotenv").config();
 
 const { Client, GatewayIntentBits, AttachmentBuilder } = require("discord.js");
-const { createCanvas } = require("canvas");
+const { createCanvas, registerFont } = require("canvas");
+const fs = require("fs");
+const path = require("path");
+const { execSync } = require("child_process");
 
 const DISCORD_TOKEN    = process.env.DISCORD_TOKEN;
 const THREAD_ID        = process.env.THREAD_ID;
@@ -23,6 +26,40 @@ if (!SETUP_MODE && (!THREAD_ID || !MESSAGE_ID)) {
 if (SETUP_MODE && !FORUM_CHANNEL_ID) {
   console.error("FORUM_CHANNEL_ID required for setup mode");
   process.exit(1);
+}
+
+// Register a font that actually exists on Ubuntu
+function setupFont() {
+  const candidates = [
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+  ];
+  let regular = null, bold = null;
+  for (const f of candidates) {
+    if (fs.existsSync(f)) {
+      if (!regular && !f.includes("Bold")) { regular = f; }
+      if (!bold && f.includes("Bold")) { bold = f; }
+    }
+  }
+  if (!regular) {
+    // Find any ttf
+    try {
+      const found = execSync("find /usr/share/fonts -name '*.ttf' | head -2").toString().trim().split("\n");
+      regular = found[0] || null;
+      bold = found[1] || found[0] || null;
+    } catch(e) {}
+  }
+  if (regular) {
+    registerFont(regular, { family: "UI", weight: "normal" });
+    console.log(`Font registered: ${regular}`);
+  }
+  if (bold) {
+    registerFont(bold, { family: "UI", weight: "bold" });
+    console.log(`Bold font registered: ${bold}`);
+  }
+  return !!regular;
 }
 
 function formatDuration(seconds) {
@@ -83,23 +120,23 @@ function generateImage({ isOnline, continuousUptime, responseTime, uptimePct, in
   // Title
   ctx.save();
   ctx.fillStyle = TEXT;
-  ctx.font = "bold 15px sans-serif";
+  ctx.font = "bold 15px UI";
   ctx.fillText(`Predictions: ${isOnline ? "Online" : "Offline"}`, 38, 33);
   ctx.restore();
 
   // Timestamp
   ctx.save();
   ctx.fillStyle = MUTED;
-  ctx.font = "11px sans-serif";
+  ctx.font = "11px UI";
   ctx.textAlign = "right";
   ctx.fillText("updated just now", W - 20, 33);
   ctx.restore();
 
   // Stat cards
   const cards = [
-    { label: "Uptime",   value: continuousUptime,                          color: TEXT  },
+    { label: "Uptime",   value: continuousUptime,                              color: TEXT  },
     { label: "Response", value: responseTime != null ? `${responseTime}ms` : "N/A", color: TEXT  },
-    { label: "Uptime %", value: `${uptimePct}%`,                           color: GREEN }
+    { label: "Uptime %", value: `${uptimePct}%`,                               color: GREEN }
   ];
   const cardW = 148, cardH = 48, cardY = 48, gap = 8, x0 = 16;
   cards.forEach((c, i) => {
@@ -108,13 +145,13 @@ function generateImage({ isOnline, continuousUptime, responseTime, uptimePct, in
 
     ctx.save();
     ctx.fillStyle = MUTED;
-    ctx.font = "11px sans-serif";
+    ctx.font = "11px UI";
     ctx.fillText(c.label, x + 10, cardY + 16);
     ctx.restore();
 
     ctx.save();
     ctx.fillStyle = c.color;
-    ctx.font = "bold 14px sans-serif";
+    ctx.font = "bold 14px UI";
     ctx.fillText(c.value, x + 10, cardY + 36);
     ctx.restore();
   });
@@ -122,7 +159,7 @@ function generateImage({ isOnline, continuousUptime, responseTime, uptimePct, in
   // Chart label
   ctx.save();
   ctx.fillStyle = MUTED;
-  ctx.font = "11px sans-serif";
+  ctx.font = "11px UI";
   ctx.fillText("Last 30 checks", 16, 118);
   ctx.restore();
 
@@ -142,7 +179,7 @@ function generateImage({ isOnline, continuousUptime, responseTime, uptimePct, in
   // Axis labels
   ctx.save();
   ctx.fillStyle = MUTED;
-  ctx.font = "10px sans-serif";
+  ctx.font = "10px UI";
   ctx.fillText("30 checks ago", 16, 174);
   ctx.textAlign = "right";
   ctx.fillText("now", W - 16, 174);
@@ -165,7 +202,7 @@ function generateImage({ isOnline, continuousUptime, responseTime, uptimePct, in
 
   ctx.save();
   ctx.fillStyle = MUTED;
-  ctx.font = "11px sans-serif";
+  ctx.font = "11px UI";
   ctx.fillText(incidentText, 16, 194);
   ctx.fillStyle = LINK;
   ctx.textAlign = "right";
@@ -221,6 +258,9 @@ async function fetchJobData() {
 }
 
 async function run() {
+  const fontOk = setupFont();
+  console.log(`Font setup: ${fontOk ? "ok" : "no font found"}`);
+
   const client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
   });
