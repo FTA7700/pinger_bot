@@ -182,7 +182,7 @@ async function buildEmbed(data) {
 ================================ */
 
 async function run() {
-  const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+  const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 
   await new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error("Login timeout")), 15000);
