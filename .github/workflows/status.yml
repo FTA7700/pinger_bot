@@ -30,10 +30,12 @@ jobs:
 
       - name: Run status update
         env:
-          DISCORD_TOKEN:   ${{ secrets.DISCORD_TOKEN }}
-          THREAD_ID:       ${{ secrets.THREAD_ID }}
-          MESSAGE_ID:      ${{ secrets.MESSAGE_ID }}
-          CHANNEL_ID:      ${{ secrets.CHANNEL_ID }}
-          CRONJOB_API_KEY: ${{ secrets.CRONJOB_API_KEY }}
-          CRONJOB_JOB_ID:  ${{ secrets.CRONJOB_JOB_ID }}
+          DISCORD_TOKEN:    ${{ secrets.DISCORD_TOKEN }}
+          THREAD_ID:        ${{ secrets.THREAD_ID }}
+          MESSAGE_ID:       ${{ secrets.MESSAGE_ID }}
+          CHANNEL_ID:       ${{ secrets.CHANNEL_ID }}
+          FORUM_CHANNEL_ID: ${{ secrets.FORUM_CHANNEL_ID }}
+          CRONJOB_API_KEY:  ${{ secrets.CRONJOB_API_KEY }}
+          CRONJOB_JOB_ID:   ${{ secrets.CRONJOB_JOB_ID }}
+          SETUP_MODE:       ${{ secrets.SETUP_MODE }}
         run: node bot.js
