@@ -23,34 +23,35 @@ async function fetchJobData() {
     "Content-Type": "application/json"
   };
 
-  // Fetch job details + history in parallel
   const [jobRes, historyRes] = await Promise.all([
     fetch(`https://api.cron-job.org/jobs/${CRONJOB_JOB_ID}`, { headers }),
-    fetch(`https://api.cron-job.org/jobs/${CRONJOB_JOB_ID}/history?count=50`, { headers })
+    fetch(`https://api.cron-job.org/jobs/${CRONJOB_JOB_ID}/history`, { headers })
   ]);
+
+  if (!jobRes.ok) throw new Error(`Job API error: ${jobRes.status}`);
+  if (!historyRes.ok) throw new Error(`History API error: ${historyRes.status}`);
 
   const jobData     = await jobRes.json();
   const historyData = await historyRes.json();
 
+  // API returns { jobDetails: { ... } }
+  const job     = jobData.jobDetails;
   const history = historyData.history ?? [];
 
-  // Latest check
-  const latest = history[0];
-  const isOnline = latest?.status === 1; // 1 = success on cron-job.org
+  // Latest check status
+  const isOnline = job.lastStatus === 1;
 
-  // Uptime % from last 50 checks
+  // Uptime % from history
   const successful = history.filter(h => h.status === 1).length;
   const uptimePct  = history.length > 0
     ? ((successful / history.length) * 100).toFixed(1)
     : "N/A";
 
-  // Last incident = last failed check
+  // Last incident = most recent failed check
   const lastIncident = history.find(h => h.status !== 1);
-  let lastIncidentStr = "No incidents recorded";
-  if (lastIncident) {
-    const d = new Date(lastIncident.date * 1000);
-    lastIncidentStr = `<t:${Math.floor(lastIncident.date)}:R>`;
-  }
+  const lastIncidentStr = lastIncident
+    ? `<t:${lastIncident.date}:R>`
+    : "No incidents recorded";
 
   return { isOnline, uptimePct, lastIncidentStr };
 }
@@ -63,8 +64,6 @@ async function run() {
   const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
   await client.login(DISCORD_TOKEN);
-
-  // Wait for ready
   await new Promise(resolve => client.once("clientReady", resolve));
   console.log(`Logged in as ${client.user.tag}`);
 
@@ -84,7 +83,7 @@ async function run() {
       .setTitle("Predictions Service Status")
       .addFields(
         { name: "Status",        value: `${statusEmoji} Predictions: ${statusText}` },
-        { name: "Uptime (50 checks)", value: `${uptimePct}%`, inline: true },
+        { name: "Uptime",        value: `${uptimePct}%`, inline: true },
         { name: "Last Incident", value: lastIncidentStr, inline: true },
         { name: "Status Page",   value: "https://1hys9555.status.cron-job.org/" }
       )
