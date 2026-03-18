@@ -50,37 +50,31 @@ function generateImage({ isOnline, continuousUptime, responseTime, uptimePct, in
   const TEXT  = "#f2f3f5";
   const MUTED = "#80848e";
 
-  // Background
   ctx.fillStyle = BG;
   ctx.fillRect(0, 0, W, H);
 
   const dotColor = isOnline ? GREEN : RED;
   const statusText = isOnline ? "Online" : "Offline";
 
-  // Centered dot
   ctx.fillStyle = dotColor;
   ctx.beginPath();
   ctx.arc(W / 2, 34, 10, 0, Math.PI * 2);
   ctx.fill();
 
-  // Big status text
   ctx.fillStyle = TEXT;
   ctx.font = "bold 28px UI";
   ctx.textAlign = "center";
   ctx.fillText(statusText, W / 2, 72);
 
-  // Uptime % in green/red
   ctx.fillStyle = dotColor;
   ctx.font = "bold 14px UI";
   ctx.fillText(`${uptimePct}% uptime`, W / 2, 94);
 
-  // Subtitle row: uptime duration · response time
   ctx.fillStyle = MUTED;
   ctx.font = "12px UI";
   const responseStr = responseTime != null ? `${responseTime}ms` : "N/A";
   ctx.fillText(`${continuousUptime}  ·  ${responseStr}`, W / 2, 114);
 
-  // Bar chart
   const count  = 30;
   const recent = history.slice(0, count).reverse();
   const bx = 20, by = 128, bw = W - 40, bh = 44;
@@ -94,7 +88,6 @@ function generateImage({ isOnline, continuousUptime, responseTime, uptimePct, in
     ctx.fillRect(x, y, barW, barH);
   });
 
-  // Axis labels
   ctx.fillStyle = MUTED;
   ctx.font = "10px UI";
   ctx.textAlign = "left";
@@ -103,7 +96,6 @@ function generateImage({ isOnline, continuousUptime, responseTime, uptimePct, in
   ctx.fillText("now", bx + bw, by + bh + 14);
   ctx.textAlign = "center";
 
-  // Footer incident text
   const incidentText = incidentCount === 0
     ? "No incidents recorded"
     : `${incidentCount} incident${incidentCount > 1 ? "s" : ""} · last ${formatDuration(Date.now() / 1000 - lastIncidentTs)} ago`;
@@ -186,11 +178,14 @@ async function run() {
       console.log(`MESSAGE_ID=${starterMessage.id}`);
     } else {
       const thread  = await client.channels.fetch(THREAD_ID);
+      console.log(`Thread: ${thread.id} — ${thread.name}`);
       const message = await thread.messages.fetch(MESSAGE_ID);
-      await Promise.all([
-        message.edit({ content: "", files: [attachment], attachments: [], embeds: [] }),
-        thread.setName(`${statusEmoji} Predictions: ${statusText}`)
-      ]);
+      console.log(`Message: ${message.id}, author: ${message.author.tag}`);
+
+      const edited = await message.edit({ content: "", files: [attachment], attachments: [], embeds: [] });
+      console.log(`Edited: ${edited.id}, attachments: ${edited.attachments.size}`);
+
+      await thread.setName(`${statusEmoji} Predictions: ${statusText}`);
       console.log(`Done — ${statusText}, uptime: ${data.continuousUptime}, ${data.uptimePct}%`);
 
       if (CHANNEL_ID && (data.justWentDown || data.justRecovered)) {
