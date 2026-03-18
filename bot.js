@@ -55,7 +55,7 @@ async function generateChart(history, count = 30) {
   const colors  = recent.map(h => h.status === 1 ? "#23a55a" : "#da373c");
   const heights = recent.map(h => h.status === 1 ? 100 : 40);
 
-  const chart = new ChartJSNodeCanvas({ width: 520, height: 80, backgroundColour: "transparent" });
+  const chart = new ChartJSNodeCanvas({ width: 520, height: 80, backgroundColour: "#2f3136" });
 
   return chart.renderToBuffer({
     type: "bar",
@@ -158,6 +158,7 @@ async function buildEmbed(data) {
   const responseStr = responseTime != null ? `${responseTime}ms` : "N/A";
 
   const chartBuffer = await generateChart(history, 30);
+  console.log(`Chart buffer size: ${chartBuffer.length} bytes`);
   const attachment  = new AttachmentBuilder(chartBuffer, { name: "status_chart.png" });
 
   const embed = new EmbedBuilder()
