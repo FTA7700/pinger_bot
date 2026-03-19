@@ -242,12 +242,15 @@ async function run() {
 
   try {
     const imgBuffer   = generateImage(data);
-    const attachment  = new AttachmentBuilder(imgBuffer, { name: "status.png" });
+    const attachment  = new AttachmentBuilder(imgBuffer, { name: `status_${Date.now()}.png` });
     const statusEmoji = data.isOnline ? "🟢" : "🔴";
     const statusText  = data.isOnline ? "Online" : "Offline";
 
+    console.log(`Fetching thread: ${THREAD_ID}, message: ${MESSAGE_ID}`);
     const thread  = await client.channels.fetch(THREAD_ID);
+    console.log(`Thread name: ${thread.name}`);
     const message = await thread.messages.fetch(MESSAGE_ID);
+    console.log(`Message author: ${message.author.tag}, content length: ${message.content.length}`);
     const edited  = await message.edit({ content: "", files: [attachment], attachments: [], embeds: [] });
     console.log(`Edited: ${edited.id}, attachments: ${edited.attachments.size}`);
     await thread.setName(`${statusEmoji} Predictions: ${statusText}`);
