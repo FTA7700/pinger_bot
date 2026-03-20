@@ -212,8 +212,6 @@ function generateImage({ isOnline, continuousUptime, responseTime, uptimePct, in
   ctx.stroke();
 
   // Last check timestamp (right side)
-  const lastCheckDate = new Date(history[0].date * 1000);
-  const timeStr = lastCheckDate.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
   ctx.fillStyle = MUTED;
   ctx.font = "10px UI";
   ctx.textAlign = "right";
