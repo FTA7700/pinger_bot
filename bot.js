@@ -123,45 +123,49 @@ function generateImage({ isOnline, continuousUptime, responseTime, uptimePct, in
   ctx.fillStyle = BG;
   ctx.fillRect(0, 0, W, H);
 
-  const dotColor = isOnline ? GREEN : RED;
+  const dotColor   = isOnline ? GREEN : RED;
   const statusText = isOnline ? "Online" : "Offline";
 
-  // Status dot + text (left aligned)
+  // Status dot
   ctx.fillStyle = dotColor;
   ctx.beginPath();
   ctx.arc(22, 26, 9, 0, Math.PI * 2);
   ctx.fill();
 
+  // Status text
   ctx.fillStyle = TEXT;
   ctx.font = "bold 28px UI";
   ctx.textAlign = "left";
   ctx.fillText(statusText, 40, 36);
 
-  // Labels row
+  // Labels
   ctx.fillStyle = MUTED;
   ctx.font = "11px UI";
   ctx.fillText("Last check  |  Uptime", 20, 60);
 
-  // Values row
+  // Last check time + uptime values
   const lastCheckDate = new Date(history[0].date * 1000);
   const timeStr = lastCheckDate.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Athens" });
+
   ctx.fillStyle = TEXT;
   ctx.font = "bold 20px UI";
-  ctx.fillText(`${timeStr}  `, 20, 84);
-  const timeWidth = ctx.measureText(`${timeStr}  `).width;
+  ctx.fillText(timeStr, 20, 84);
+  const timeWidth = ctx.measureText(timeStr).width;
+
   ctx.fillStyle = DIM;
   ctx.font = "18px UI";
-  ctx.fillText("|  ", 20 + timeWidth, 84);
-  const sepWidth = ctx.measureText("|  ").width;
+  ctx.fillText("  |  ", 20 + timeWidth, 84);
+  const sepWidth = ctx.measureText("  |  ").width;
+
   ctx.fillStyle = TEXT;
   ctx.font = "bold 20px UI";
   ctx.fillText(continuousUptime, 20 + timeWidth + sepWidth, 84);
 
+  // Chart
   const count  = Math.min(history.length, MAX_HISTORY);
   const recent = history.slice(0, count).reverse();
   const bx = 20, by = 98, bw = W - 40, bh = 68;
 
-  // Red incident columns
   recent.forEach((h, i) => {
     if (h.status !== 1) {
       const x = bx + (i / Math.max(recent.length - 1, 1)) * bw;
@@ -170,16 +174,14 @@ function generateImage({ isOnline, continuousUptime, responseTime, uptimePct, in
     }
   });
 
-  // Y positions based on response time
   const validTimes = recent.filter(h => h.status === 1).map(h => h.duration);
-  const maxTime = validTimes.length > 0 ? Math.max(...validTimes) * 1.2 : 1000;
+  const maxTime    = validTimes.length > 0 ? Math.max(...validTimes) * 1.2 : 1000;
 
   const pts = recent.map((h, i) => ({
     x: bx + (i / Math.max(recent.length - 1, 1)) * bw,
     y: h.status === 1 ? by + bh - (h.duration / maxTime) * (bh - 6) : null
   }));
 
-  // Filled gradient area
   const grad = ctx.createLinearGradient(0, by, 0, by + bh);
   grad.addColorStop(0, "rgba(35,165,90,0.5)");
   grad.addColorStop(1, "rgba(35,165,90,0.02)");
@@ -199,7 +201,6 @@ function generateImage({ isOnline, continuousUptime, responseTime, uptimePct, in
     ctx.fill();
   }
 
-  // Line on top
   ctx.beginPath();
   let lineStarted = false;
   pts.forEach(p => {
@@ -211,24 +212,16 @@ function generateImage({ isOnline, continuousUptime, responseTime, uptimePct, in
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  // Last check timestamp (right side)
-  ctx.fillStyle = MUTED;
-  ctx.font = "10px UI";
-  ctx.textAlign = "right";
-  ctx.fillText(`last check ${timeStr}`, bx + bw, by + bh + 13);
-  ctx.textAlign = "center";
-
-
-
+  // Footer
   const incidentText = incidentCount === 0
     ? "No incidents recorded"
     : `${incidentCount} incident${incidentCount > 1 ? "s" : ""} · last ${formatDuration(Date.now() / 1000 - lastIncidentTs)} ago`;
-  ctx.fillStyle = MUTED;
-  ctx.font = "11px UI";
+
   ctx.fillStyle = MUTED;
   ctx.font = "11px UI";
   ctx.textAlign = "left";
   ctx.fillText(incidentText, 20, 193);
+
   ctx.fillStyle = DIM;
   ctx.textAlign = "right";
   ctx.fillText(`${responseTime}ms`, W - 20, 193);
@@ -237,6 +230,7 @@ function generateImage({ isOnline, continuousUptime, responseTime, uptimePct, in
   console.log(`Image buffer: ${buf.length} bytes`);
   return buf;
 }
+
 
 async function run() {
   setupFont();
