@@ -118,6 +118,7 @@ function generateImage({ isOnline, continuousUptime, responseTime, uptimePct, in
   const RED   = "#da373c";
   const TEXT  = "#f2f3f5";
   const MUTED = "#80848e";
+  const DIM   = "#4e5058";
 
   ctx.fillStyle = BG;
   ctx.fillRect(0, 0, W, H);
@@ -125,27 +126,40 @@ function generateImage({ isOnline, continuousUptime, responseTime, uptimePct, in
   const dotColor = isOnline ? GREEN : RED;
   const statusText = isOnline ? "Online" : "Offline";
 
+  // Status dot + text (left aligned)
   ctx.fillStyle = dotColor;
   ctx.beginPath();
-  ctx.arc(W / 2, 26, 10, 0, Math.PI * 2);
+  ctx.arc(22, 26, 9, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.fillStyle = TEXT;
   ctx.font = "bold 28px UI";
-  ctx.textAlign = "center";
-  ctx.fillText(statusText, W / 2, 62);
+  ctx.textAlign = "left";
+  ctx.fillText(statusText, 40, 36);
 
-  ctx.fillStyle = dotColor;
-  ctx.font = "bold 14px UI";
-  ctx.fillText(`${uptimePct}% uptime`, W / 2, 80);
-
+  // Labels row
   ctx.fillStyle = MUTED;
-  ctx.font = "12px UI";
-  ctx.fillText(`${continuousUptime}  ·  ${responseTime}ms`, W / 2, 96);
+  ctx.font = "11px UI";
+  ctx.fillText("Last check  |  Uptime", 20, 60);
+
+  // Values row
+  const lastCheckDate = new Date(history[0].date * 1000);
+  const timeStr = lastCheckDate.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Athens" });
+  ctx.fillStyle = TEXT;
+  ctx.font = "bold 20px UI";
+  ctx.fillText(`${timeStr}  `, 20, 84);
+  const timeWidth = ctx.measureText(`${timeStr}  `).width;
+  ctx.fillStyle = DIM;
+  ctx.font = "18px UI";
+  ctx.fillText("|  ", 20 + timeWidth, 84);
+  const sepWidth = ctx.measureText("|  ").width;
+  ctx.fillStyle = TEXT;
+  ctx.font = "bold 20px UI";
+  ctx.fillText(continuousUptime, 20 + timeWidth + sepWidth, 84);
 
   const count  = Math.min(history.length, MAX_HISTORY);
   const recent = history.slice(0, count).reverse();
-  const bx = 20, by = 106, bw = W - 40, bh = 62;
+  const bx = 20, by = 98, bw = W - 40, bh = 68;
 
   // Red incident columns
   recent.forEach((h, i) => {
@@ -199,11 +213,7 @@ function generateImage({ isOnline, continuousUptime, responseTime, uptimePct, in
 
   // Last check timestamp (right side)
   const lastCheckDate = new Date(history[0].date * 1000);
-  const timeStr = lastCheckDate.toLocaleTimeString("en-GB", { 
-  hour: "2-digit", 
-  minute: "2-digit",
-  timeZone: "Europe/Athens"
-});
+  const timeStr = lastCheckDate.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
   ctx.fillStyle = MUTED;
   ctx.font = "10px UI";
   ctx.textAlign = "right";
@@ -217,7 +227,13 @@ function generateImage({ isOnline, continuousUptime, responseTime, uptimePct, in
     : `${incidentCount} incident${incidentCount > 1 ? "s" : ""} · last ${formatDuration(Date.now() / 1000 - lastIncidentTs)} ago`;
   ctx.fillStyle = MUTED;
   ctx.font = "11px UI";
-  ctx.fillText(incidentText, W / 2, 195);
+  ctx.fillStyle = MUTED;
+  ctx.font = "11px UI";
+  ctx.textAlign = "left";
+  ctx.fillText(incidentText, 20, 193);
+  ctx.fillStyle = DIM;
+  ctx.textAlign = "right";
+  ctx.fillText(`${responseTime}ms`, W - 20, 193);
 
   const buf = canvas.toBuffer("image/png");
   console.log(`Image buffer: ${buf.length} bytes`);
