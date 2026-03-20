@@ -14,7 +14,7 @@ const HISTORY_FILE  = path.join(process.env.GITHUB_WORKSPACE || ".", "history.js
 const MAX_HISTORY   = 30;
 
 if (!DISCORD_TOKEN || !THREAD_ID || !MESSAGE_ID) {
-  console.error("Missing required env vars: DISCORD_TOKEN, THREAD_ID, MESSAGE_ID");
+  console.error("Missing required env vars");
   process.exit(1);
 }
 
@@ -27,10 +27,7 @@ function setupFont() {
   ];
   let loaded = 0;
   for (const f of candidates) {
-    if (fs.existsSync(f)) {
-      GlobalFonts.registerFromPath(f, "UI");
-      loaded++;
-    }
+    if (fs.existsSync(f)) { GlobalFonts.registerFromPath(f, "UI"); loaded++; }
   }
   console.log(`Fonts loaded: ${loaded}`);
 }
@@ -65,12 +62,8 @@ async function pingService() {
 
 function loadHistory() {
   try {
-    if (fs.existsSync(HISTORY_FILE)) {
-      return JSON.parse(fs.readFileSync(HISTORY_FILE, "utf8"));
-    }
-  } catch (e) {
-    console.log("No history file, starting fresh");
-  }
+    if (fs.existsSync(HISTORY_FILE)) return JSON.parse(fs.readFileSync(HISTORY_FILE, "utf8"));
+  } catch (e) { console.log("No history file, starting fresh"); }
   return [];
 }
 
@@ -88,14 +81,11 @@ function computeStats(history, currentCheck) {
   const lastIncident = incidents[0];
 
   let continuousUptime;
-  if (!isOnline) {
-    continuousUptime = "Offline";
-  } else if (!lastIncident) {
+  if (!isOnline) continuousUptime = "Offline";
+  else if (!lastIncident) {
     const oldest = all[all.length - 1];
-    continuousUptime = oldest ? formatDuration(Date.now() / 1000 - oldest.date) + "+" : "N/A";
-  } else {
-    continuousUptime = formatDuration(Date.now() / 1000 - lastIncident.date);
-  }
+    continuousUptime = oldest ? formatDuration(Date.now() / 1000 - oldest.date) : "N/A";
+  } else continuousUptime = formatDuration(Date.now() / 1000 - lastIncident.date);
 
   const [latest, previous] = all;
   return {
@@ -126,40 +116,35 @@ function generateImage({ isOnline, continuousUptime, responseTime, uptimePct, in
   const dotColor   = isOnline ? GREEN : RED;
   const statusText = isOnline ? "Online" : "Offline";
 
-  // Status dot
+  // Measure to center dot + text together
+  ctx.font = "bold 28px UI";
+  const textWidth  = ctx.measureText(statusText).width;
+  const blockWidth = 18 + 10 + textWidth;
+  const startX     = (W - blockWidth) / 2;
+
+  // Dot
   ctx.fillStyle = dotColor;
   ctx.beginPath();
-  ctx.arc(22, 26, 9, 0, Math.PI * 2);
+  ctx.arc(startX + 9, 30, 9, 0, Math.PI * 2);
   ctx.fill();
 
   // Status text
   ctx.fillStyle = TEXT;
-  ctx.font = "bold 28px UI";
   ctx.textAlign = "left";
-  ctx.fillText(statusText, 40, 36);
+  ctx.fillText(statusText, startX + 28, 40);
 
-  // Labels
+  // Labels row
   ctx.fillStyle = MUTED;
   ctx.font = "11px UI";
-  ctx.fillText("Last check  |  Uptime", 20, 60);
+  ctx.textAlign = "center";
+  ctx.fillText("Last check  |  Uptime", W / 2, 62);
 
-  // Last check time + uptime values
+  // Values row
   const lastCheckDate = new Date(history[0].date * 1000);
   const timeStr = lastCheckDate.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Athens" });
-
   ctx.fillStyle = TEXT;
   ctx.font = "bold 20px UI";
-  ctx.fillText(timeStr, 20, 84);
-  const timeWidth = ctx.measureText(timeStr).width;
-
-  ctx.fillStyle = DIM;
-  ctx.font = "18px UI";
-  ctx.fillText("  |  ", 20 + timeWidth, 84);
-  const sepWidth = ctx.measureText("  |  ").width;
-
-  ctx.fillStyle = TEXT;
-  ctx.font = "bold 20px UI";
-  ctx.fillText(continuousUptime, 20 + timeWidth + sepWidth, 84);
+  ctx.fillText(`${timeStr}  |  ${continuousUptime}`, W / 2, 86);
 
   // Chart
   const count  = Math.min(history.length, MAX_HISTORY);
@@ -231,7 +216,6 @@ function generateImage({ isOnline, continuousUptime, responseTime, uptimePct, in
   return buf;
 }
 
-
 async function run() {
   setupFont();
 
@@ -258,11 +242,8 @@ async function run() {
     const statusEmoji = data.isOnline ? "🟢" : "🔴";
     const statusText  = data.isOnline ? "Online" : "Offline";
 
-    console.log(`Fetching thread: ${THREAD_ID}, message: ${MESSAGE_ID}`);
     const thread  = await client.channels.fetch(THREAD_ID);
-    console.log(`Thread name: ${thread.name}`);
     const message = await thread.messages.fetch(MESSAGE_ID);
-    console.log(`Message author: ${message.author.tag}, content length: ${message.content.length}`);
     const edited  = await message.edit({ content: "", files: [attachment], attachments: [], embeds: [] });
     console.log(`Edited: ${edited.id}, attachments: ${edited.attachments.size}`);
     await thread.setName(`${statusEmoji} Predictions: ${statusText}`);
